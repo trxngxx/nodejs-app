@@ -6,11 +6,12 @@ metadata:
   labels:
     app: nodejs-app
 spec:
+  type: NodePort
   selector:
     app: nodejs-app
   ports:
-    name: grpc
-    # - protocol: TCP
-      port: 50051
-      targetPort: 50051
+  - name: grpc
+    # protocol: TCP
+    port: 50051
+    targetPort: 50051
   type: NodePort
