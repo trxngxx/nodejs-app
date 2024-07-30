@@ -33,23 +33,19 @@ pool.connect((err, client, release) => {
   }
 });
 
-// CartService implementation
+// Các service gRPC
 const cartService = {
   AddItem: (call, callback) => {
-    // Logic to add item to cart in database
     callback(null, {});
   },
   GetCart: (call, callback) => {
-    // Logic to get cart from database
     callback(null, { user_id: call.request.user_id, items: [] });
   },
   EmptyCart: (call, callback) => {
-    // Logic to empty cart in database
     callback(null, {});
   }
 };
 
-// Các service khác
 const recommendationService = {
   ListRecommendations: (call, callback) => {
     callback(null, { product_ids: [] });
