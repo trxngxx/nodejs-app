@@ -17,7 +17,6 @@ spec:
       annotations:
         sidecar.istio.io/inject: "true"
         traffic.sidecar.istio.io/includeInboundPorts: "50051"
-        traffic.sidecar.istio.io/includeOutboundIPRanges: "192.168.80.216/32"
     spec:
       containers:
       - name: nodejs-app

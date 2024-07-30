@@ -1,38 +1,18 @@
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
 metadata:
   name: nodejs-app
   namespace: demo
-  labels:
-    app: nodejs-app
 spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: nodejs-app
-  template:
-    metadata:
-      labels:
-        app: nodejs-app
-      annotations:
-        sidecar.istio.io/inject: "true"
-        traffic.sidecar.istio.io/includeInboundPorts: "50051"
-        traffic.sidecar.istio.io/includeOutboundIPRanges: "192.168.80.216/32"
-    spec:
-      containers:
-      - name: nodejs-app
-        image: 29trxngxx/nodejs-app:latest
-        ports:
-        - containerPort: 50051
-        env:
-        - name: POSTGRES_HOST
-          value: "192.168.80.216"
-        - name: POSTGRES_PORT
-          value: "5432"
-        - name: POSTGRES_DB
-          value: "mydatabase"
-        - name: POSTGRES_USER
-          value: "postgres"
-        - name: POSTGRES_PASSWORD
-          value: "seta@123"
-        command: ["sh", "-c", "npm install && npm start"]
+  hosts:
+    - "*"
+  gateways:
+    - istio-system/istio-ingressgateway
+  http:
+    - match:
+        - port: 80
+      route:
+        - destination:
+            host: nodejs-app-service.demo.svc.cluster.local
+            port:
+              number: 50051
