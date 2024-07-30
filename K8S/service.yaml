@@ -9,7 +9,7 @@ spec:
   selector:
     app: nodejs-app
   ports:
-  - name: gRPC
+  - name: grpc
     # protocol: TCP
     port: 80
     targetPort: 50051
