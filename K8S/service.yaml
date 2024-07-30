@@ -9,7 +9,8 @@ spec:
   selector:
     app: nodejs-app
   ports:
-    - protocol: TCP
+    name: grpc
+    # - protocol: TCP
       port: 50051
       targetPort: 50051
   type: NodePort
