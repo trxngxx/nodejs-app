@@ -30,3 +30,4 @@ spec:
           value: "postgres"
         - name: POSTGRES_PASSWORD
           value: "seta@123"
+        command: ["sh", "-c", "npm install && npm start"]
