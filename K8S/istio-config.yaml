@@ -23,3 +23,15 @@ spec:
             host: nodejs-app-service.demo.svc.cluster.local
             port:
               number: 50051
+
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: nodejs-app
+  namespace: demo
+spec:
+  host: nodejs-app-service.demo.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
