@@ -15,7 +15,7 @@ const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
 
 const hipstershopProto = grpc.loadPackageDefinition(packageDefinition).hipstershop;
 
-// PostgreSQL connection pool
+// Thiết lập kết nối PostgreSQL
 const pool = new Pool({
   host: process.env.POSTGRES_HOST,
   port: process.env.POSTGRES_PORT,
@@ -24,287 +24,89 @@ const pool = new Pool({
   password: process.env.POSTGRES_PASSWORD
 });
 
-pool.connect(err => {
+pool.connect((err, client, release) => {
   if (err) {
     console.error('Error connecting to PostgreSQL:', err.stack);
   } else {
     console.log('Connected to PostgreSQL');
+    release();
   }
 });
 
-// Check connection to PostgreSQL
-pool.connect((err, client, release) => {
-    if (err) {
-      console.error('Error connecting to PostgreSQL:', err.stack);
-      console.error('Connection details:', {
-        host: process.env.POSTGRES_HOST,
-        port: process.env.POSTGRES_PORT,
-        database: process.env.POSTGRES_DB,
-        user: process.env.POSTGRES_USER,
-        password: process.env.POSTGRES_PASSWORD
-      });
-    } else {
-      console.log('Connected to PostgreSQL');
-      release();
-    }
-  });
-
 // CartService implementation
 const cartService = {
-  AddItem: async (call, callback) => {
-    try {
-      console.log('AddItem called with:', call.request);
-      const { user_id, item } = call.request;
-      await pool.query('INSERT INTO cart (user_id, product_id, quantity) VALUES ($1, $2, $3)', [user_id, item.product_id, item.quantity]);
-      callback(null, {});
-    } catch (err) {
-      console.error('Error adding item to cart:', err);
-      callback({
-        code: grpc.status.INTERNAL,
-        details: 'Internal server error'
-      });
-    }
+  AddItem: (call, callback) => {
+    // Logic to add item to cart in database
+    callback(null, {});
   },
-  GetCart: async (call, callback) => {
-    try {
-      console.log('GetCart called with:', call.request);
-      const { user_id } = call.request;
-      const result = await pool.query('SELECT product_id, quantity FROM cart WHERE user_id = $1', [user_id]);
-      const items = result.rows.map(row => ({ product_id: row.product_id, quantity: row.quantity }));
-      callback(null, { user_id, items });
-    } catch (err) {
-      console.error('Error getting cart:', err);
-      callback({
-        code: grpc.status.INTERNAL,
-        details: 'Internal server error'
-      });
-    }
+  GetCart: (call, callback) => {
+    // Logic to get cart from database
+    callback(null, { user_id: call.request.user_id, items: [] });
   },
-  EmptyCart: async (call, callback) => {
-    try {
-      console.log('EmptyCart called with:', call.request);
-      const { user_id } = call.request;
-      await pool.query('DELETE FROM cart WHERE user_id = $1', [user_id]);
-      callback(null, {});
-    } catch (err) {
-      console.error('Error emptying cart:', err);
-      callback({
-        code: grpc.status.INTERNAL,
-        details: 'Internal server error'
-      });
-    }
+  EmptyCart: (call, callback) => {
+    // Logic to empty cart in database
+    callback(null, {});
   }
 };
 
-// RecommendationService implementation
+// Các service khác
 const recommendationService = {
   ListRecommendations: (call, callback) => {
-    console.log('ListRecommendations called with:', call.request);
     callback(null, { product_ids: [] });
   }
 };
 
-// ProductCatalogService implementation
 const productCatalogService = {
-  ListProducts: async (call, callback) => {
-    try {
-      console.log('ListProducts called');
-      const result = await pool.query('SELECT id, name, description, picture, price_usd, categories FROM products');
-      const products = result.rows.map(row => ({
-        id: row.id,
-        name: row.name,
-        description: row.description,
-        picture: row.picture,
-        price_usd: { currency_code: 'USD', units: row.price_usd, nanos: 0 },
-        categories: row.categories.split(',')
-      }));
-      callback(null, { products });
-    } catch (err) {
-      console.error('Error listing products:', err);
-      callback({
-        code: grpc.status.INTERNAL,
-        details: 'Internal server error'
-      });
-    }
+  ListProducts: (call, callback) => {
+    callback(null, { products: [] });
   },
-  GetProduct: async (call, callback) => {
-    try {
-      console.log('GetProduct called with:', call.request);
-      const { id } = call.request;
-      const result = await pool.query('SELECT id, name, description, picture, price_usd, categories FROM products WHERE id = $1', [id]);
-      if (result.rows.length === 0) {
-        callback({
-          code: grpc.status.NOT_FOUND,
-          details: 'Product not found'
-        });
-        return;
-      }
-      const row = result.rows[0];
-      callback(null, {
-        id: row.id,
-        name: row.name,
-        description: row.description,
-        picture: row.picture,
-        price_usd: { currency_code: 'USD', units: row.price_usd, nanos: 0 },
-        categories: row.categories.split(',')
-      });
-    } catch (err) {
-      console.error('Error getting product:', err);
-      callback({
-        code: grpc.status.INTERNAL,
-        details: 'Internal server error'
-      });
-    }
+  GetProduct: (call, callback) => {
+    callback(null, { id: call.request.id, name: '', description: '', picture: '', price_usd: {}, categories: [] });
   },
-  SearchProducts: async (call, callback) => {
-    try {
-      console.log('SearchProducts called with:', call.request);
-      const { query } = call.request;
-      const result = await pool.query('SELECT id, name, description, picture, price_usd, categories FROM products WHERE name ILIKE $1 OR description ILIKE $1', [`%${query}%`]);
-      const results = result.rows.map(row => ({
-        id: row.id,
-        name: row.name,
-        description: row.description,
-        picture: row.picture,
-        price_usd: { currency_code: 'USD', units: row.price_usd, nanos: 0 },
-        categories: row.categories.split(',')
-      }));
-      callback(null, { results });
-    } catch (err) {
-      console.error('Error searching products:', err);
-      callback({
-        code: grpc.status.INTERNAL,
-        details: 'Internal server error'
-      });
-    }
+  SearchProducts: (call, callback) => {
+    callback(null, { results: [] });
   }
 };
 
-// ShippingService implementation
 const shippingService = {
-  GetQuote: async (call, callback) => {
-    try {
-      console.log('GetQuote called with:', call.request);
-      // Add logic to get shipping quote
-      callback(null, { cost_usd: { currency_code: 'USD', units: 0, nanos: 0 } });
-    } catch (err) {
-      console.error('Error getting shipping quote:', err);
-      callback({
-        code: grpc.status.INTERNAL,
-        details: 'Internal server error'
-      });
-    }
+  GetQuote: (call, callback) => {
+    callback(null, { cost_usd: {} });
   },
-  ShipOrder: async (call, callback) => {
-    try {
-      console.log('ShipOrder called with:', call.request);
-      // Add logic to ship order
-      callback(null, { tracking_id: '123456' });
-    } catch (err) {
-      console.error('Error shipping order:', err);
-      callback({
-        code: grpc.status.INTERNAL,
-        details: 'Internal server error'
-      });
-    }
+  ShipOrder: (call, callback) => {
+    callback(null, { tracking_id: '123456' });
   }
 };
 
-// CurrencyService implementation
 const currencyService = {
-  GetSupportedCurrencies: async (call, callback) => {
-    try {
-      console.log('GetSupportedCurrencies called');
-      // Add logic to get supported currencies
-      callback(null, { currency_codes: ['USD'] });
-    } catch (err) {
-      console.error('Error getting supported currencies:', err);
-      callback({
-        code: grpc.status.INTERNAL,
-        details: 'Internal server error'
-      });
-    }
+  GetSupportedCurrencies: (call, callback) => {
+    callback(null, { currency_codes: [] });
   },
-  Convert: async (call, callback) => {
-    try {
-      console.log('Convert called with:', call.request);
-      // Add logic to convert currency
-      callback(null, { currency_code: 'USD', units: 0, nanos: 0 });
-    } catch (err) {
-      console.error('Error converting currency:', err);
-      callback({
-        code: grpc.status.INTERNAL,
-        details: 'Internal server error'
-      });
-    }
+  Convert: (call, callback) => {
+    callback(null, { currency_code: '', units: 0, nanos: 0 });
   }
 };
 
-// PaymentService implementation
 const paymentService = {
-  Charge: async (call, callback) => {
-    try {
-      console.log('Charge called with:', call.request);
-      // Add logic to charge payment
-      callback(null, { transaction_id: 'txn_123456' });
-    } catch (err) {
-      console.error('Error charging payment:', err);
-      callback({
-        code: grpc.status.INTERNAL,
-        details: 'Internal server error'
-      });
-    }
+  Charge: (call, callback) => {
+    callback(null, { transaction_id: 'txn_123456' });
   }
 };
 
-// EmailService implementation
 const emailService = {
-  SendOrderConfirmation: async (call, callback) => {
-    try {
-      console.log('SendOrderConfirmation called with:', call.request);
-      // Add logic to send order confirmation email
-      callback(null, {});
-    } catch (err) {
-      console.error('Error sending order confirmation email:', err);
-      callback({
-        code: grpc.status.INTERNAL,
-        details: 'Internal server error'
-      });
-    }
+  SendOrderConfirmation: (call, callback) => {
+    callback(null, {});
   }
 };
 
-// CheckoutService implementation
 const checkoutService = {
-  PlaceOrder: async (call, callback) => {
-    try {
-      console.log('PlaceOrder called with:', call.request);
-      // Add logic to place order
-      callback(null, { order: {} });
-    } catch (err) {
-      console.error('Error placing order:', err);
-      callback({
-        code: grpc.status.INTERNAL,
-        details: 'Internal server error'
-      });
-    }
+  PlaceOrder: (call, callback) => {
+    callback(null, { order: {} });
   }
 };
 
-// AdService implementation
 const adService = {
-  GetAds: async (call, callback) => {
-    try {
-      console.log('GetAds called with:', call.request);
-      // Add logic to get ads
-      callback(null, { ads: [] });
-    } catch (err) {
-      console.error('Error getting ads:', err);
-      callback({
-        code: grpc.status.INTERNAL,
-        details: 'Internal server error'
-      });
-    }
+  GetAds: (call, callback) => {
+    callback(null, { ads: [] });
   }
 };
 
