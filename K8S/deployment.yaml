@@ -16,13 +16,14 @@ spec:
         app: nodejs-app
       annotations:
         sidecar.istio.io/inject: "true"
-        traffic.sidecar.istio.io/includeInboundPorts: "50051"
+        traffic.sidecar.istio.io/includeInboundPorts: "50051,8080"
     spec:
       containers:
       - name: nodejs-app
         image: 29trxngxx/nodejs-app:latest
         ports:
         - containerPort: 50051
+        - containerPort: 8080
         env:
         - name: POSTGRES_HOST
           value: "192.168.80.216"
