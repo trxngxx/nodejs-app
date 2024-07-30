@@ -4,8 +4,8 @@ metadata:
   name: nodejs-app
   namespace: demo
 spec:
-  hosts:
-    - "*"
+  # hosts:
+  #   - "*"
   gateways:
     - istio-system/istio-ingressgateway
   http:
