@@ -8,13 +8,13 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm install
+RUN npm ci --only=production
 
 # Copy the rest of the application code to the working directory
 COPY . .
 
-# Expose the port that the app runs on
-EXPOSE 50051
+# Expose both gRPC and HTTP ports
+EXPOSE 50051 8080
 
 # Run the app
-CMD ["npm", "start"]
+CMD ["node", "server.js"]

@@ -14,14 +14,10 @@ spec:
         host: nodejs-app-service.demo.svc.cluster.local
         port:
           number: 8080
----
-apiVersion: networking.istio.io/v1alpha3
-kind: DestinationRule
-metadata:
-  name: nodejs-app-service
-  namespace: demo
-spec:
-  host: nodejs-app-service.demo.svc.cluster.local
-  trafficPolicy:
-    loadBalancer:
-      simple: ROUND_ROBIN
+  - match:
+    - port: 50051
+    route:
+    - destination:
+        host: nodejs-app-service.demo.svc.cluster.local
+        port:
+          number: 50051

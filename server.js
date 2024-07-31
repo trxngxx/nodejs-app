@@ -1,9 +1,8 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const grpc = require('grpc');
+const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
 const { Pool } = require('pg');
-require('dotenv').config();
 
 const PROTO_PATH = './proto/hipstershop.proto';
 
@@ -35,8 +34,42 @@ pool.connect((err, client, release) => {
   }
 });
 
-const app = express();
+// gRPC Registration Service
+const registrationService = {
+  Register: (call, callback) => {
+    const { name, email, password } = call.request;
 
+    pool.query(
+      'INSERT INTO users (name, email, password) VALUES ($1, $2, $3)',
+      [name, email, password],
+      (err) => {
+        if (err) {
+          console.error('Error inserting data:', err.stack);
+          callback(null, { success: false, message: 'Error saving data' });
+        } else {
+          callback(null, { success: true, message: 'Registration successful' });
+        }
+      }
+    );
+  }
+};
+
+// Khởi tạo gRPC server
+const grpcServer = new grpc.Server();
+grpcServer.addService(hipstershopProto.RegistrationService.service, registrationService);
+
+const GRPC_PORT = 50051;
+grpcServer.bindAsync(`0.0.0.0:${GRPC_PORT}`, grpc.ServerCredentials.createInsecure(), (err, port) => {
+  if (err) {
+    console.error('Failed to bind gRPC server:', err);
+    return;
+  }
+  console.log(`gRPC Server running at http://0.0.0.0:${port}`);
+  grpcServer.start();
+});
+
+// Express HTTP Server
+const app = express();
 app.set('view engine', 'ejs');
 app.use(bodyParser.urlencoded({ extended: false }));
 
@@ -45,113 +78,21 @@ app.get('/', (req, res) => {
   res.render('index');
 });
 
-// Handle form submission
+// Handle form submission and forward to gRPC service
 app.post('/register', (req, res) => {
   const { name, email, password } = req.body;
 
-  pool.query(
-    'INSERT INTO users (name, email, password) VALUES ($1, $2, $3)',
-    [name, email, password],
-    (err) => {
-      if (err) {
-        console.error('Error inserting data:', err.stack);
-        res.status(500).send('Error saving data');
-      } else {
-        res.send('Registration successful');
-      }
+  const client = new hipstershopProto.RegistrationService(`localhost:${GRPC_PORT}`, grpc.credentials.createInsecure());
+
+  client.Register({ name, email, password }, (err, response) => {
+    if (err || !response.success) {
+      console.error('Error registering user:', err ? err.message : response.message);
+      res.status(500).send('Error saving data');
+    } else {
+      res.send('Registration successful');
     }
-  );
+  });
 });
-
-// Các service gRPC
-const cartService = {
-  AddItem: (call, callback) => {
-    callback(null, {});
-  },
-  GetCart: (call, callback) => {
-    callback(null, { user_id: call.request.user_id, items: [] });
-  },
-  EmptyCart: (call, callback) => {
-    callback(null, {});
-  }
-};
-
-const recommendationService = {
-  ListRecommendations: (call, callback) => {
-    callback(null, { product_ids: [] });
-  }
-};
-
-const productCatalogService = {
-  ListProducts: (call, callback) => {
-    callback(null, { products: [] });
-  },
-  GetProduct: (call, callback) => {
-    callback(null, { id: call.request.id, name: '', description: '', picture: '', price_usd: {}, categories: [] });
-  },
-  SearchProducts: (call, callback) => {
-    callback(null, { results: [] });
-  }
-};
-
-const shippingService = {
-  GetQuote: (call, callback) => {
-    callback(null, { cost_usd: {} });
-  },
-  ShipOrder: (call, callback) => {
-    callback(null, { tracking_id: '123456' });
-  }
-};
-
-const currencyService = {
-  GetSupportedCurrencies: (call, callback) => {
-    callback(null, { currency_codes: [] });
-  },
-  Convert: (call, callback) => {
-    callback(null, { currency_code: '', units: 0, nanos: 0 });
-  }
-};
-
-const paymentService = {
-  Charge: (call, callback) => {
-    callback(null, { transaction_id: 'txn_123456' });
-  }
-};
-
-const emailService = {
-  SendOrderConfirmation: (call, callback) => {
-    callback(null, {});
-  }
-};
-
-const checkoutService = {
-  PlaceOrder: (call, callback) => {
-    callback(null, { order: {} });
-  }
-};
-
-const adService = {
-  GetAds: (call, callback) => {
-    callback(null, { ads: [] });
-  }
-};
-
-const grpcServer = new grpc.Server();
-
-grpcServer.addService(hipstershopProto.CartService.service, cartService);
-grpcServer.addService(hipstershopProto.RecommendationService.service, recommendationService);
-grpcServer.addService(hipstershopProto.ProductCatalogService.service, productCatalogService);
-grpcServer.addService(hipstershopProto.ShippingService.service, shippingService);
-grpcServer.addService(hipstershopProto.CurrencyService.service, currencyService);
-grpcServer.addService(hipstershopProto.PaymentService.service, paymentService);
-grpcServer.addService(hipstershopProto.EmailService.service, emailService);
-grpcServer.addService(hipstershopProto.CheckoutService.service, checkoutService);
-grpcServer.addService(hipstershopProto.AdService.service, adService);
-
-const PORT = 50051;
-grpcServer.bind(`0.0.0.0:${PORT}`, grpc.ServerCredentials.createInsecure());
-console.log(`gRPC Server running at http://0.0.0.0:${PORT}`);
-grpcServer.start();
 
 const HTTP_PORT = 8080;
 app.listen(HTTP_PORT, () => {

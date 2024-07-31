@@ -2,6 +2,23 @@ syntax = "proto3";
 
 package hipstershop;
 
+// -------------Registration service-----------------
+
+service RegistrationService {
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+}
+
+message RegisterRequest {
+  string name = 1;
+  string email = 2;
+  string password = 3;
+}
+
+message RegisterResponse {
+  bool success = 1;
+  string message = 2;
+}
+
 // -----------------Cart service-----------------
 
 service CartService {
