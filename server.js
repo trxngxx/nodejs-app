@@ -1,7 +1,8 @@
+const express = require('express');
+const bodyParser = require('body-parser');
 const grpc = require('grpc');
 const protoLoader = require('@grpc/proto-loader');
 const { Pool } = require('pg');
-const express = require('express'); // Thêm dòng này để sử dụng Express
 require('dotenv').config();
 
 const PROTO_PATH = './proto/hipstershop.proto';
@@ -32,6 +33,34 @@ pool.connect((err, client, release) => {
     console.log('Connected to PostgreSQL');
     release();
   }
+});
+
+const app = express();
+
+app.set('view engine', 'ejs');
+app.use(bodyParser.urlencoded({ extended: false }));
+
+// Serve the registration form
+app.get('/', (req, res) => {
+  res.render('index');
+});
+
+// Handle form submission
+app.post('/register', (req, res) => {
+  const { name, email, password } = req.body;
+
+  pool.query(
+    'INSERT INTO users (name, email, password) VALUES ($1, $2, $3)',
+    [name, email, password],
+    (err) => {
+      if (err) {
+        console.error('Error inserting data:', err.stack);
+        res.status(500).send('Error saving data');
+      } else {
+        res.send('Registration successful');
+      }
+    }
+  );
 });
 
 // Các service gRPC
@@ -107,40 +136,24 @@ const adService = {
   }
 };
 
-const server = new grpc.Server();
+const grpcServer = new grpc.Server();
 
-server.addService(hipstershopProto.CartService.service, cartService);
-server.addService(hipstershopProto.RecommendationService.service, recommendationService);
-server.addService(hipstershopProto.ProductCatalogService.service, productCatalogService);
-server.addService(hipstershopProto.ShippingService.service, shippingService);
-server.addService(hipstershopProto.CurrencyService.service, currencyService);
-server.addService(hipstershopProto.PaymentService.service, paymentService);
-server.addService(hipstershopProto.EmailService.service, emailService);
-server.addService(hipstershopProto.CheckoutService.service, checkoutService);
-server.addService(hipstershopProto.AdService.service, adService);
+grpcServer.addService(hipstershopProto.CartService.service, cartService);
+grpcServer.addService(hipstershopProto.RecommendationService.service, recommendationService);
+grpcServer.addService(hipstershopProto.ProductCatalogService.service, productCatalogService);
+grpcServer.addService(hipstershopProto.ShippingService.service, shippingService);
+grpcServer.addService(hipstershopProto.CurrencyService.service, currencyService);
+grpcServer.addService(hipstershopProto.PaymentService.service, paymentService);
+grpcServer.addService(hipstershopProto.EmailService.service, emailService);
+grpcServer.addService(hipstershopProto.CheckoutService.service, checkoutService);
+grpcServer.addService(hipstershopProto.AdService.service, adService);
 
 const PORT = 50051;
-server.bind(`0.0.0.0:${PORT}`, grpc.ServerCredentials.createInsecure());
-console.log(`gRPC server running at http://0.0.0.0:${PORT}`);
-server.start();
+grpcServer.bind(`0.0.0.0:${PORT}`, grpc.ServerCredentials.createInsecure());
+console.log(`gRPC Server running at http://0.0.0.0:${PORT}`);
+grpcServer.start();
 
-// Thiết lập HTTP server với Express
-const app = express();
-const HTTP_PORT = 8080; // Bạn có thể thay đổi cổng này nếu cần
-
-app.get('/', (req, res) => {
-  res.send('Hello, world! This is a useful information page.');
-});
-
-app.get('/db-info', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT NOW()'); // Truy vấn ví dụ để lấy thời gian hiện tại từ DB
-    res.send(`Database Time: ${result.rows[0].now}`);
-  } catch (err) {
-    res.status(500).send(`Error querying the database: ${err.message}`);
-  }
-});
-
+const HTTP_PORT = 8080;
 app.listen(HTTP_PORT, () => {
-  console.log(`HTTP server running at http://0.0.0.0:${HTTP_PORT}`);
+  console.log(`HTTP Server running at http://0.0.0.0:${HTTP_PORT}`);
 });
