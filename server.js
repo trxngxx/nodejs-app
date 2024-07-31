@@ -16,15 +16,19 @@ const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
 
 const hipstershopProto = grpc.loadPackageDefinition(packageDefinition).hipstershop;
 
-// Thiết lập kết nối PostgreSQL
+// Thiết lập kết nối PostgreSQL với pool
 const pool = new Pool({
   host: process.env.POSTGRES_HOST,
   port: process.env.POSTGRES_PORT,
   database: process.env.POSTGRES_DB,
   user: process.env.POSTGRES_USER,
-  password: process.env.POSTGRES_PASSWORD
+  password: process.env.POSTGRES_PASSWORD,
+  // Thêm cấu hình keep-alive
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10000
 });
 
+// Kiểm tra kết nối khi khởi động
 pool.connect((err, client, release) => {
   if (err) {
     console.error('Error connecting to PostgreSQL:', err.stack);
@@ -33,6 +37,16 @@ pool.connect((err, client, release) => {
     release();
   }
 });
+
+// Gọi health check định kỳ
+setInterval(async () => {
+  try {
+    await pool.query('SELECT 1');
+    console.log('Database connection is alive');
+  } catch (error) {
+    console.error('Database connection error:', error);
+  }
+}, 60000); // Kiểm tra mỗi phút
 
 // gRPC Registration Service
 const registrationService = {
@@ -92,6 +106,16 @@ app.post('/register', (req, res) => {
       res.send('Registration successful');
     }
   });
+});
+
+// Thêm endpoint health check
+app.get('/health', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.status(200).send('OK');
+  } catch (error) {
+    res.status(500).send('Database connection error');
+  }
 });
 
 const HTTP_PORT = 8080;
