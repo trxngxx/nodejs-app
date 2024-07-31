@@ -4,6 +4,26 @@ const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
 const { Pool } = require('pg');
 
+// OpenTelemetry
+const opentelemetry = require('@opentelemetry/sdk-node');
+const { getNodeAutoInstrumentations } = require('@opentelemetry/auto-instrumentations-node');
+const { JaegerExporter } = require('@opentelemetry/exporter-jaeger');
+const { Resource } = require('@opentelemetry/resources');
+const { SemanticResourceAttributes } = require('@opentelemetry/semantic-conventions');
+
+// Configure OpenTelemetry
+const sdk = new opentelemetry.NodeSDK({
+  resource: new Resource({
+    [SemanticResourceAttributes.SERVICE_NAME]: 'nodejs-registration-service',
+  }),
+  traceExporter: new JaegerExporter({
+    endpoint: 'http://jaeger-collector.istio-system:14268/api/traces',
+  }),
+  instrumentations: [getNodeAutoInstrumentations()]
+});
+
+sdk.start();
+
 const PROTO_PATH = './proto/hipstershop.proto';
 
 const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
@@ -16,19 +36,18 @@ const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
 
 const hipstershopProto = grpc.loadPackageDefinition(packageDefinition).hipstershop;
 
-// Thiết lập kết nối PostgreSQL với pool
+// PostgreSQL connection pool setup
 const pool = new Pool({
   host: process.env.POSTGRES_HOST,
   port: process.env.POSTGRES_PORT,
   database: process.env.POSTGRES_DB,
   user: process.env.POSTGRES_USER,
   password: process.env.POSTGRES_PASSWORD,
-  // Thêm cấu hình keep-alive
   keepAlive: true,
   keepAliveInitialDelayMillis: 10000
 });
 
-// Kiểm tra kết nối khi khởi động
+// Check connection on startup
 pool.connect((err, client, release) => {
   if (err) {
     console.error('Error connecting to PostgreSQL:', err.stack);
@@ -38,7 +57,7 @@ pool.connect((err, client, release) => {
   }
 });
 
-// Gọi health check định kỳ
+// Periodic health check
 setInterval(async () => {
   try {
     await pool.query('SELECT 1');
@@ -46,7 +65,7 @@ setInterval(async () => {
   } catch (error) {
     console.error('Database connection error:', error);
   }
-}, 60000); // Kiểm tra mỗi phút
+}, 60000);
 
 // gRPC Registration Service
 const registrationService = {
@@ -68,7 +87,7 @@ const registrationService = {
   }
 };
 
-// Khởi tạo gRPC server
+// Initialize gRPC server
 const grpcServer = new grpc.Server();
 grpcServer.addService(hipstershopProto.RegistrationService.service, registrationService);
 
@@ -108,7 +127,7 @@ app.post('/register', (req, res) => {
   });
 });
 
-// Thêm endpoint health check
+// Health check endpoint
 app.get('/health', async (req, res) => {
   try {
     await pool.query('SELECT 1');
@@ -121,4 +140,13 @@ app.get('/health', async (req, res) => {
 const HTTP_PORT = 8080;
 app.listen(HTTP_PORT, () => {
   console.log(`HTTP Server running at http://0.0.0.0:${HTTP_PORT}`);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM signal received: closing HTTP server')
+  sdk.shutdown()
+    .then(() => console.log('Tracing terminated'))
+    .catch((error) => console.log('Error terminating tracing', error))
+    .finally(() => process.exit(0));
 });

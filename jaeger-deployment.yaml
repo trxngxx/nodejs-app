@@ -1,0 +1,144 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: istio-system
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-collector
+  namespace: istio-system
+  labels:
+    app: jaeger
+spec:
+  ports:
+  - port: 14267
+    name: collect-bin
+  - port: 14268
+    name: collect-thrift
+  - port: 9411
+    name: collect-zipkin
+  selector:
+    app: jaeger
+    jaeger: jaeger
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaeger-collector
+  namespace: istio-system
+  labels:
+    app: jaeger
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jaeger
+      jaeger: jaeger
+  template:
+    metadata:
+      labels:
+        app: jaeger
+        jaeger: jaeger
+    spec:
+      containers:
+      - name: jaeger-collector
+        image: jaegertracing/jaeger-collector:1.23
+        ports:
+        - containerPort: 14267
+          name: collect-bin
+        - containerPort: 14268
+          name: collect-thrift
+        - containerPort: 9411
+          name: collect-zipkin
+        env:
+        - name: COLLECTOR_ZIPKIN_HTTP_PORT
+          value: "9411"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-query
+  namespace: istio-system
+  labels:
+    app: jaeger
+spec:
+  ports:
+  - port: 16686
+    name: query
+  selector:
+    app: jaeger
+    jaeger: jaeger
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaeger-query
+  namespace: istio-system
+  labels:
+    app: jaeger
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jaeger
+      jaeger: jaeger
+  template:
+    metadata:
+      labels:
+        app: jaeger
+        jaeger: jaeger
+    spec:
+      containers:
+      - name: jaeger-query
+        image: jaegertracing/jaeger-query:1.23
+        ports:
+        - containerPort: 16686
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-agent
+  namespace: istio-system
+  labels:
+    app: jaeger
+spec:
+  ports:
+  - port: 6831
+    name: agent-compact
+  - port: 6832
+    name: agent-binary
+  - port: 5778
+    name: config-rest
+  selector:
+    app: jaeger
+    jaeger: jaeger
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: jaeger-agent
+  namespace: istio-system
+  labels:
+    app: jaeger
+spec:
+  selector:
+    matchLabels:
+      app: jaeger
+      jaeger: jaeger
+  template:
+    metadata:
+      labels:
+        app: jaeger
+        jaeger: jaeger
+    spec:
+      containers:
+      - name: jaeger-agent
+        image: jaegertracing/jaeger-agent:1.23
+        ports:
+        - containerPort: 6831
+          name: agent-compact
+        - containerPort: 6832
+          name: agent-binary
+        - containerPort: 5778
+          name: config-rest
