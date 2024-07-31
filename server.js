@@ -1,6 +1,7 @@
 const grpc = require('grpc');
 const protoLoader = require('@grpc/proto-loader');
 const { Pool } = require('pg');
+const express = require('express'); // Thêm dòng này để sử dụng Express
 require('dotenv').config();
 
 const PROTO_PATH = './proto/hipstershop.proto';
@@ -120,5 +121,26 @@ server.addService(hipstershopProto.AdService.service, adService);
 
 const PORT = 50051;
 server.bind(`0.0.0.0:${PORT}`, grpc.ServerCredentials.createInsecure());
-console.log(`Server running at http://0.0.0.0:${PORT}`);
+console.log(`gRPC server running at http://0.0.0.0:${PORT}`);
 server.start();
+
+// Thiết lập HTTP server với Express
+const app = express();
+const HTTP_PORT = 8080; // Bạn có thể thay đổi cổng này nếu cần
+
+app.get('/', (req, res) => {
+  res.send('Hello, world! This is a useful information page.');
+});
+
+app.get('/db-info', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT NOW()'); // Truy vấn ví dụ để lấy thời gian hiện tại từ DB
+    res.send(`Database Time: ${result.rows[0].now}`);
+  } catch (err) {
+    res.status(500).send(`Error querying the database: ${err.message}`);
+  }
+});
+
+app.listen(HTTP_PORT, () => {
+  console.log(`HTTP server running at http://0.0.0.0:${HTTP_PORT}`);
+});
