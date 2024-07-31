@@ -7,7 +7,7 @@ const { Pool } = require('pg');
 // OpenTelemetry
 const opentelemetry = require('@opentelemetry/sdk-node');
 const { getNodeAutoInstrumentations } = require('@opentelemetry/auto-instrumentations-node');
-const { JaegerExporter } = require('@opentelemetry/exporter-jaeger');
+const { OTLPTraceExporter } = require('@opentelemetry/exporter-trace-otlp-http');
 const { Resource } = require('@opentelemetry/resources');
 const { SemanticResourceAttributes } = require('@opentelemetry/semantic-conventions');
 
@@ -16,8 +16,8 @@ const sdk = new opentelemetry.NodeSDK({
   resource: new Resource({
     [SemanticResourceAttributes.SERVICE_NAME]: 'nodejs-registration-service',
   }),
-  traceExporter: new JaegerExporter({
-    endpoint: 'http://jaeger-collector.istio-system:14268/api/traces',
+  traceExporter: new OTLPTraceExporter({
+    url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://jaeger-collector.istio-system:4318/v1/traces',
   }),
   instrumentations: [getNodeAutoInstrumentations()]
 });
