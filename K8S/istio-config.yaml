@@ -5,19 +5,19 @@ metadata:
   namespace: demo
 spec:
   hosts:
-  - nodejs-app-service.demo.svc.cluster.local
+  - "nodejs-app-service.demo.svc.cluster.local"
   http:
   - match:
     - port: 80
     route:
     - destination:
-        host: nodejs-app-service.demo.svc.cluster.local
+        host: nodejs-app-service
         port:
           number: 8080
   - match:
     - port: 50051
     route:
     - destination:
-        host: nodejs-app-service.demo.svc.cluster.local
+        host: nodejs-app-service
         port:
           number: 50051
