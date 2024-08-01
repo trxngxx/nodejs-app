@@ -6,14 +6,15 @@ const { Pool } = require('pg');
 const http = require('http');  // <-- Thêm dòng này
 
 // OpenTelemetry
-const opentelemetry = require('@opentelemetry/sdk-node');
+const { NodeSDK } = require('@opentelemetry/sdk-node');
 const { getNodeAutoInstrumentations } = require('@opentelemetry/auto-instrumentations-node');
 const { OTLPTraceExporter } = require('@opentelemetry/exporter-trace-otlp-http');
 const { Resource } = require('@opentelemetry/resources');
 const { SemanticResourceAttributes } = require('@opentelemetry/semantic-conventions');
+const { trace } = require('@opentelemetry/api');
 
 // Configure OpenTelemetry
-const sdk = new opentelemetry.NodeSDK({
+const sdk = new NodeSDK({
   resource: new Resource({
     [SemanticResourceAttributes.SERVICE_NAME]: 'nodejs-registration-service',
   }),
@@ -24,6 +25,8 @@ const sdk = new opentelemetry.NodeSDK({
 });
 
 sdk.start();
+
+const tracer = trace.getTracer('example-tracer-http');
 
 const PROTO_PATH = './proto/hipstershop.proto';
 
@@ -138,9 +141,12 @@ app.get('/health', async (req, res) => {
   }
 });
 
-// write timer interval every 1 second to get google.com content
-setInterval(() => {
-  http.get('http://google.com', (res) => {
+// Function to fetch content from a given URL with OpenTelemetry tracing
+function fetchContent(url) {
+  const span = tracer.startSpan(`fetching ${url}`);
+  span.setAttribute('http.url', url);
+
+  http.get(url, (res) => {
     let data = '';
 
     res.on('data', (chunk) => {
@@ -148,11 +154,22 @@ setInterval(() => {
     });
 
     res.on('end', () => {
-      console.log(data);
+      console.log(`Data from ${url}:`, data);
+      span.end();
     });
   }).on('error', (err) => {
-    console.error('Error fetching google.com:', err.message);
+    console.error(`Error fetching ${url}:`, err.message);
+    span.recordException(err);
+    span.setStatus({ code: 2, message: err.message }); // 2 is the code for ERROR
+    span.end();
   });
+}
+
+// Write timer interval every 1 second to get content from multiple URLs
+setInterval(() => {
+  fetchContent('http://google.com');
+  fetchContent('http://yahoo.com');
+  fetchContent('http://facebook.com');
 }, 1000);
 
 const HTTP_PORT = 8080;
