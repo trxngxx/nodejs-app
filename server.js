@@ -3,6 +3,7 @@ const bodyParser = require('body-parser');
 const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
 const { Pool } = require('pg');
+const http = require('http');  // <-- Thêm dòng này
 
 // OpenTelemetry
 const opentelemetry = require('@opentelemetry/sdk-node');
@@ -137,9 +138,21 @@ app.get('/health', async (req, res) => {
   }
 });
 
-// write timmer interval every 1 second to get google.com content
+// write timer interval every 1 second to get google.com content
 setInterval(() => {
-  http.get('https://google.com')
+  http.get('http://google.com', (res) => {
+    let data = '';
+
+    res.on('data', (chunk) => {
+      data += chunk;
+    });
+
+    res.on('end', () => {
+      console.log(data);
+    });
+  }).on('error', (err) => {
+    console.error('Error fetching google.com:', err.message);
+  });
 }, 1000);
 
 const HTTP_PORT = 8080;
@@ -149,7 +162,7 @@ app.listen(HTTP_PORT, () => {
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
-  console.log('SIGTERM signal received: closing HTTP server')
+  console.log('SIGTERM signal received: closing HTTP server');
   sdk.shutdown()
     .then(() => console.log('Tracing terminated'))
     .catch((error) => console.log('Error terminating tracing', error))
