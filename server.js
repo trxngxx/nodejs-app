@@ -137,6 +137,11 @@ app.get('/health', async (req, res) => {
   }
 });
 
+// write timmer interval every 1 second to get google.com content
+setInterval(() => {
+  http.get('https://google.com')
+}, 1000);
+
 const HTTP_PORT = 8080;
 app.listen(HTTP_PORT, () => {
   console.log(`HTTP Server running at http://0.0.0.0:${HTTP_PORT}`);
