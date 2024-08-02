@@ -3,7 +3,7 @@ const bodyParser = require('body-parser');
 const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
 const { Pool } = require('pg');
-const http = require('http');  // <-- Thêm dòng này
+const http = require('http');
 
 // OpenTelemetry
 const { NodeSDK } = require('@opentelemetry/sdk-node');
@@ -71,10 +71,35 @@ setInterval(async () => {
   }
 }, 60000);
 
+// gRPC interceptor for tracing
+function createGrpcInterceptor() {
+  return (options, nextCall) => {
+    return new grpc.InterceptingCall(nextCall(options), {
+      start: (metadata, listener, next) => {
+        const span = trace.getTracer('example-tracer-grpc').startSpan(`grpc-${options.method_definition.path}`);
+        metadata.set('traceparent', span.spanContext().toString());
+        next(metadata, {
+          onReceiveStatus: (status, next) => {
+            span.setStatus({
+              code: status.code === grpc.status.OK ? trace.SpanStatusCode.OK : trace.SpanStatusCode.ERROR,
+              message: status.details
+            });
+            span.end();
+            next(status);
+          }
+        });
+      }
+    });
+  };
+}
+
 // gRPC Registration Service
 const registrationService = {
   Register: (call, callback) => {
+    const span = trace.getTracer('example-tracer-grpc').startSpan('Register');
     const { name, email, password } = call.request;
+    span.setAttribute('user.name', name);
+    span.setAttribute('user.email', email);
 
     pool.query(
       'INSERT INTO users (name, email, password) VALUES ($1, $2, $3)',
@@ -82,10 +107,14 @@ const registrationService = {
       (err) => {
         if (err) {
           console.error('Error inserting data:', err.stack);
+          span.recordException(err);
+          span.setStatus({ code: trace.SpanStatusCode.ERROR, message: 'Error saving data' });
           callback(null, { success: false, message: 'Error saving data' });
         } else {
+          span.setStatus({ code: trace.SpanStatusCode.OK });
           callback(null, { success: true, message: 'Registration successful' });
         }
+        span.end();
       }
     );
   }
@@ -117,27 +146,44 @@ app.get('/', (req, res) => {
 
 // Handle form submission and forward to gRPC service
 app.post('/register', (req, res) => {
+  const span = tracer.startSpan('http-register');
   const { name, email, password } = req.body;
+  span.setAttribute('user.name', name);
+  span.setAttribute('user.email', email);
 
-  const client = new hipstershopProto.RegistrationService(`localhost:${GRPC_PORT}`, grpc.credentials.createInsecure());
+  const client = new hipstershopProto.RegistrationService(
+    `localhost:${GRPC_PORT}`,
+    grpc.credentials.createInsecure(),
+    { interceptors: [createGrpcInterceptor()] }
+  );
 
   client.Register({ name, email, password }, (err, response) => {
     if (err || !response.success) {
       console.error('Error registering user:', err ? err.message : response.message);
+      span.recordException(err || new Error(response.message));
+      span.setStatus({ code: trace.SpanStatusCode.ERROR, message: 'Error saving data' });
       res.status(500).send('Error saving data');
     } else {
+      span.setStatus({ code: trace.SpanStatusCode.OK });
       res.send('Registration successful');
     }
+    span.end();
   });
 });
 
 // Health check endpoint
 app.get('/health', async (req, res) => {
+  const span = tracer.startSpan('health-check');
   try {
     await pool.query('SELECT 1');
+    span.setStatus({ code: trace.SpanStatusCode.OK });
     res.status(200).send('OK');
   } catch (error) {
+    span.recordException(error);
+    span.setStatus({ code: trace.SpanStatusCode.ERROR, message: 'Database connection error' });
     res.status(500).send('Database connection error');
+  } finally {
+    span.end();
   }
 });
 
@@ -160,7 +206,7 @@ function fetchContent(url) {
   }).on('error', (err) => {
     console.error(`Error fetching ${url}:`, err.message);
     span.recordException(err);
-    span.setStatus({ code: 2, message: err.message }); // 2 is the code for ERROR
+    span.setStatus({ code: trace.SpanStatusCode.ERROR, message: err.message });
     span.end();
   });
 }
