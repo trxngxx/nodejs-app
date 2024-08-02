@@ -211,12 +211,12 @@ function fetchContent(url) {
   });
 }
 
-// // Write timer interval every 1 second to get content from multiple URLs
-// setInterval(() => {
-//   fetchContent('http://google.com');
-//   fetchContent('http://yahoo.com');
-//   fetchContent('http://facebook.com');
-// }, 1000);
+// Write timer interval every 1 second to get content from multiple URLs
+setInterval(() => {
+  fetchContent('http://google.com');
+  fetchContent('http://yahoo.com');
+  fetchContent('http://facebook.com');
+}, 1000);
 
 const HTTP_PORT = 8080;
 app.listen(HTTP_PORT, () => {
