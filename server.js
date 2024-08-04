@@ -4,6 +4,8 @@ const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
 const { Pool } = require('pg');
 const http = require('http');
+const winston = require('winston');
+const promClient = require('prom-client');
 
 // OpenTelemetry
 const { NodeSDK } = require('@opentelemetry/sdk-node');
@@ -12,6 +14,31 @@ const { OTLPTraceExporter } = require('@opentelemetry/exporter-trace-otlp-http')
 const { Resource } = require('@opentelemetry/resources');
 const { SemanticResourceAttributes } = require('@opentelemetry/semantic-conventions');
 const { trace } = require('@opentelemetry/api');
+
+// Configure Winston logger
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.json(),
+  defaultMeta: { service: 'nodejs-registration-service' },
+  transports: [
+    new winston.transports.Console(),
+    new winston.transports.File({ filename: 'error.log', level: 'error' }),
+    new winston.transports.File({ filename: 'combined.log' })
+  ]
+});
+
+// Configure Prometheus
+const register = new promClient.Registry();
+promClient.collectDefaultMetrics({ register });
+
+const httpRequestDurationMicroseconds = new promClient.Histogram({
+  name: 'http_request_duration_seconds',
+  help: 'Duration of HTTP requests in seconds',
+  labelNames: ['method', 'route', 'code'],
+  buckets: [0.1, 0.3, 0.5, 0.7, 1, 3, 5, 7, 10]
+});
+
+register.registerMetric(httpRequestDurationMicroseconds);
 
 // Configure OpenTelemetry
 const sdk = new NodeSDK({
@@ -54,9 +81,9 @@ const pool = new Pool({
 // Check connection on startup
 pool.connect((err, client, release) => {
   if (err) {
-    console.error('Error connecting to PostgreSQL:', err.stack);
+    logger.error('Error connecting to PostgreSQL:', err.stack);
   } else {
-    console.log('Connected to PostgreSQL');
+    logger.info('Connected to PostgreSQL');
     release();
   }
 });
@@ -65,9 +92,9 @@ pool.connect((err, client, release) => {
 setInterval(async () => {
   try {
     await pool.query('SELECT 1');
-    console.log('Database connection is alive');
+    logger.info('Database connection is alive');
   } catch (error) {
-    console.error('Database connection error:', error);
+    logger.error('Database connection error:', error);
   }
 }, 60000);
 
@@ -106,7 +133,7 @@ const registrationService = {
       [name, email, password],
       (err) => {
         if (err) {
-          console.error('Error inserting data:', err.stack);
+          logger.error('Error inserting data:', err.stack);
           span.recordException(err);
           span.setStatus({ code: trace.SpanStatusCode.ERROR, message: 'Error saving data' });
           callback(null, { success: false, message: 'Error saving data' });
@@ -127,10 +154,10 @@ grpcServer.addService(hipstershopProto.RegistrationService.service, registration
 const GRPC_PORT = 50051;
 grpcServer.bindAsync(`0.0.0.0:${GRPC_PORT}`, grpc.ServerCredentials.createInsecure(), (err, port) => {
   if (err) {
-    console.error('Failed to bind gRPC server:', err);
+    logger.error('Failed to bind gRPC server:', err);
     return;
   }
-  console.log(`gRPC Server running at http://0.0.0.0:${port}`);
+  logger.info(`gRPC Server running at http://0.0.0.0:${port}`);
   grpcServer.start();
 });
 
@@ -138,6 +165,18 @@ grpcServer.bindAsync(`0.0.0.0:${GRPC_PORT}`, grpc.ServerCredentials.createInsecu
 const app = express();
 app.set('view engine', 'ejs');
 app.use(bodyParser.urlencoded({ extended: false }));
+
+// Middleware to measure HTTP request duration
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    httpRequestDurationMicroseconds
+      .labels(req.method, req.route?.path || req.path, res.statusCode)
+      .observe(duration / 1000); // Convert to seconds
+  });
+  next();
+});
 
 // Serve the registration form
 app.get('/', (req, res) => {
@@ -159,7 +198,7 @@ app.post('/register', (req, res) => {
 
   client.Register({ name, email, password }, (err, response) => {
     if (err || !response.success) {
-      console.error('Error registering user:', err ? err.message : response.message);
+      logger.error('Error registering user:', err ? err.message : response.message);
       span.recordException(err || new Error(response.message));
       span.setStatus({ code: trace.SpanStatusCode.ERROR, message: 'Error saving data' });
       res.status(500).send('Error saving data');
@@ -176,15 +215,32 @@ app.get('/health', async (req, res) => {
   const span = tracer.startSpan('health-check');
   try {
     await pool.query('SELECT 1');
+    const memoryUsage = process.memoryUsage();
+    const healthStatus = {
+      status: 'UP',
+      db: 'UP',
+      memory: {
+        rss: `${Math.round(memoryUsage.rss / 1024 / 1024)} MB`,
+        heapTotal: `${Math.round(memoryUsage.heapTotal / 1024 / 1024)} MB`,
+        heapUsed: `${Math.round(memoryUsage.heapUsed / 1024 / 1024)} MB`,
+      }
+    };
     span.setStatus({ code: trace.SpanStatusCode.OK });
-    res.status(200).send('OK');
+    res.status(200).json(healthStatus);
   } catch (error) {
+    logger.error('Health check failed:', error);
     span.recordException(error);
     span.setStatus({ code: trace.SpanStatusCode.ERROR, message: 'Database connection error' });
-    res.status(500).send('Database connection error');
+    res.status(500).json({ status: 'DOWN', error: error.message });
   } finally {
     span.end();
   }
+});
+
+// Prometheus metrics endpoint
+app.get('/metrics', async (req, res) => {
+  res.set('Content-Type', register.contentType);
+  res.end(await register.metrics());
 });
 
 // Function to fetch content from a given URL with OpenTelemetry tracing
@@ -200,11 +256,11 @@ function fetchContent(url) {
     });
 
     res.on('end', () => {
-      console.log(`Data from ${url}:`, data);
+      logger.info(`Data fetched from ${url}`, { dataLength: data.length });
       span.end();
     });
   }).on('error', (err) => {
-    console.error(`Error fetching ${url}:`, err.message);
+    logger.error(`Error fetching ${url}:`, err.message);
     span.recordException(err);
     span.setStatus({ code: trace.SpanStatusCode.ERROR, message: err.message });
     span.end();
@@ -220,14 +276,14 @@ setInterval(() => {
 
 const HTTP_PORT = 8080;
 app.listen(HTTP_PORT, () => {
-  console.log(`HTTP Server running at http://0.0.0.0:${HTTP_PORT}`);
+  logger.info(`HTTP Server running at http://0.0.0.0:${HTTP_PORT}`);
 });
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
-  console.log('SIGTERM signal received: closing HTTP server');
+  logger.info('SIGTERM signal received: closing HTTP server');
   sdk.shutdown()
-    .then(() => console.log('Tracing terminated'))
-    .catch((error) => console.log('Error terminating tracing', error))
+    .then(() => logger.info('Tracing terminated'))
+    .catch((error) => logger.error('Error terminating tracing', error))
     .finally(() => process.exit(0));
 });
