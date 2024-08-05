@@ -280,10 +280,10 @@ app.get('/metrics', async (req, res) => {
 //   fetchContent('http://facebook.com');
 // }, 1000);
 
-// const HTTP_PORT = 8080;
-// app.listen(HTTP_PORT, () => {
-//   logger.info(`HTTP Server running at http://0.0.0.0:${HTTP_PORT}`);
-// });
+const HTTP_PORT = 8080;
+app.listen(HTTP_PORT, () => {
+  logger.info(`HTTP Server running at http://0.0.0.0:${HTTP_PORT}`);
+});
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
