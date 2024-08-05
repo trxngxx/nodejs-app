@@ -1,9 +1,7 @@
 const pino = require('pino');
 const pinoHttp = require('pino-http');
-const logger = pino();
-const httpLogger = pinoHttp({ logger });
-
-app.use(httpLogger);
+const pinoLogger = pino();
+const httpLogger = pinoHttp({ logger: pinoLogger });
 
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -172,6 +170,7 @@ grpcServer.bindAsync(`0.0.0.0:${GRPC_PORT}`, grpc.ServerCredentials.createInsecu
 const app = express();
 app.set('view engine', 'ejs');
 app.use(bodyParser.urlencoded({ extended: false }));
+app.use(httpLogger); // Move this line after Express server initialization
 
 // Middleware to measure HTTP request duration
 app.use((req, res, next) => {
@@ -263,11 +262,11 @@ function fetchContent(url) {
     });
 
     res.on('end', () => {
-      logger.info(`Data fetched from ${url}`, { dataLength: data.length });
+      pinoLogger.info(`Data fetched from ${url}`, { dataLength: data.length });
       span.end();
     });
   }).on('error', (err) => {
-    logger.error(`Error fetching ${url}:`, err.message);
+    pinoLogger.error(`Error fetching ${url}:`, err.message);
     span.recordException(err);
     span.setStatus({ code: trace.SpanStatusCode.ERROR, message: err.message });
     span.end();
