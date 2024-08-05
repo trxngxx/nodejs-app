@@ -18,7 +18,7 @@ const { getNodeAutoInstrumentations } = require('@opentelemetry/auto-instrumenta
 const { OTLPTraceExporter } = require('@opentelemetry/exporter-trace-otlp-http');
 const { Resource } = require('@opentelemetry/resources');
 const { SemanticResourceAttributes } = require('@opentelemetry/semantic-conventions');
-const { trace } = require('@opentelemetry/api');
+const { trace, SpanStatusCode } = require('@opentelemetry/api'); // Include SpanStatusCode
 
 // Configure Winston logger
 const logger = winston.createLogger({
@@ -113,7 +113,7 @@ function createGrpcInterceptor() {
         next(metadata, {
           onReceiveStatus: (status, next) => {
             span.setStatus({
-              code: status.code === grpc.status.OK ? trace.SpanStatusCode.OK : trace.SpanStatusCode.ERROR,
+              code: status.code === grpc.status.OK ? SpanStatusCode.OK : SpanStatusCode.ERROR,
               message: status.details
             });
             span.end();
@@ -140,10 +140,10 @@ const registrationService = {
         if (err) {
           logger.error('Error inserting data:', err.stack);
           span.recordException(err);
-          span.setStatus({ code: trace.SpanStatusCode.ERROR, message: 'Error saving data' });
+          span.setStatus({ code: SpanStatusCode.ERROR, message: 'Error saving data' });
           callback(null, { success: false, message: 'Error saving data' });
         } else {
-          span.setStatus({ code: trace.SpanStatusCode.OK });
+          span.setStatus({ code: SpanStatusCode.OK });
           callback(null, { success: true, message: 'Registration successful' });
         }
         span.end();
@@ -206,10 +206,10 @@ app.post('/register', (req, res) => {
     if (err || !response.success) {
       logger.error('Error registering user:', err ? err.message : response.message);
       span.recordException(err || new Error(response.message));
-      span.setStatus({ code: trace.SpanStatusCode.ERROR, message: 'Error saving data' });
+      span.setStatus({ code: SpanStatusCode.ERROR, message: 'Error saving data' });
       res.status(500).send('Error saving data');
     } else {
-      span.setStatus({ code: trace.SpanStatusCode.OK });
+      span.setStatus({ code: SpanStatusCode.OK });
       res.send('Registration successful');
     }
     span.end();
@@ -231,12 +231,12 @@ app.get('/health', async (req, res) => {
         heapUsed: `${Math.round(memoryUsage.heapUsed / 1024 / 1024)} MB`,
       }
     };
-    span.setStatus({ code: trace.SpanStatusCode.OK });
+    span.setStatus({ code: SpanStatusCode.OK });
     res.status(200).json(healthStatus);
   } catch (error) {
     logger.error('Health check failed:', error);
     span.recordException(error);
-    span.setStatus({ code: trace.SpanStatusCode.ERROR, message: 'Database connection error' });
+    span.setStatus({ code: SpanStatusCode.ERROR, message: 'Database connection error' });
     res.status(500).json({ status: 'DOWN', error: error.message });
   } finally {
     span.end();
@@ -268,17 +268,17 @@ function fetchContent(url) {
   }).on('error', (err) => {
     pinoLogger.error(`Error fetching ${url}:`, err.message);
     span.recordException(err);
-    span.setStatus({ code: trace.SpanStatusCode.ERROR, message: err.message });
+    span.setStatus({ code: SpanStatusCode.ERROR, message: err.message });
     span.end();
   });
 }
 
 // Write timer interval every 1 second to get content from multiple URLs
-setInterval(() => {
-  fetchContent('http://google.com');
-  fetchContent('http://yahoo.com');
-  fetchContent('http://facebook.com');
-}, 1000);
+// setInterval(() => {
+//   fetchContent('http://google.com');
+//   fetchContent('http://yahoo.com');
+//   fetchContent('http://facebook.com');
+// }, 1000);
 
 const HTTP_PORT = 8080;
 app.listen(HTTP_PORT, () => {
