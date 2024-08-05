@@ -1,3 +1,10 @@
+const pino = require('pino');
+const pinoHttp = require('pino-http');
+const logger = pino();
+const httpLogger = pinoHttp({ logger });
+
+app.use(httpLogger);
+
 const express = require('express');
 const bodyParser = require('body-parser');
 const grpc = require('@grpc/grpc-js');
