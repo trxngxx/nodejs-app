@@ -170,7 +170,7 @@ grpcServer.bindAsync(`0.0.0.0:${GRPC_PORT}`, grpc.ServerCredentials.createInsecu
 const app = express();
 app.set('view engine', 'ejs');
 app.use(bodyParser.urlencoded({ extended: false }));
-app.use(httpLogger); // Move this line after Express server initialization
+app.use(httpLogger); // Ensure the httpLogger middleware is used after Express initialization
 
 // Middleware to measure HTTP request duration
 app.use((req, res, next) => {
