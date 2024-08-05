@@ -250,40 +250,40 @@ app.get('/metrics', async (req, res) => {
 });
 
 // Function to fetch content from a given URL with OpenTelemetry tracing
-function fetchContent(url) {
-  const span = tracer.startSpan(`fetching ${url}`);
-  span.setAttribute('http.url', url);
+// function fetchContent(url) {
+//   const span = tracer.startSpan(`fetching ${url}`);
+//   span.setAttribute('http.url', url);
 
-  http.get(url, (res) => {
-    let data = '';
+//   http.get(url, (res) => {
+//     let data = '';
 
-    res.on('data', (chunk) => {
-      data += chunk;
-    });
+//     res.on('data', (chunk) => {
+//       data += chunk;
+//     });
 
-    res.on('end', () => {
-      pinoLogger.info(`Data fetched from ${url}`, { dataLength: data.length });
-      span.end();
-    });
-  }).on('error', (err) => {
-    pinoLogger.error(`Error fetching ${url}:`, err.message);
-    span.recordException(err);
-    span.setStatus({ code: SpanStatusCode.ERROR, message: err.message });
-    span.end();
-  });
-}
+//     res.on('end', () => {
+//       pinoLogger.info(`Data fetched from ${url}`, { dataLength: data.length });
+//       span.end();
+//     });
+//   }).on('error', (err) => {
+//     pinoLogger.error(`Error fetching ${url}:`, err.message);
+//     span.recordException(err);
+//     span.setStatus({ code: SpanStatusCode.ERROR, message: err.message });
+//     span.end();
+//   });
+// }
 
-// Write timer interval every 1 second to get content from multiple URLs
+// // Write timer interval every 1 second to get content from multiple URLs
 // setInterval(() => {
 //   fetchContent('http://google.com');
 //   fetchContent('http://yahoo.com');
 //   fetchContent('http://facebook.com');
 // }, 1000);
 
-const HTTP_PORT = 8080;
-app.listen(HTTP_PORT, () => {
-  logger.info(`HTTP Server running at http://0.0.0.0:${HTTP_PORT}`);
-});
+// const HTTP_PORT = 8080;
+// app.listen(HTTP_PORT, () => {
+//   logger.info(`HTTP Server running at http://0.0.0.0:${HTTP_PORT}`);
+// });
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
