@@ -34,7 +34,7 @@ spec:
         - name: POSTGRES_USER
           value: "postgres"
         - name: POSTGRES_PASSWORD
-          value: "seta@123"
+          value: "$"
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
           value: "http://jaeger-collector.istio-system:4318/v1/traces"
         command: ["sh", "-c", "npm install && npm start"]
