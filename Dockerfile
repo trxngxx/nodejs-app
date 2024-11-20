@@ -1,5 +1,5 @@
 # Use the official Node.js image as the base image
-FROM node:14-alpine
+FROM node:14.21.0-alpine
 
 # Install curl for healthchecks
 RUN apk add --no-cache curl
